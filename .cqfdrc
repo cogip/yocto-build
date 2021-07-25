@@ -3,4 +3,4 @@ org='cogip'
 name='bsp'
 
 [build]
-command='python3 build.py'
+command='MACHINE=cogip-pi0-w DISTRO=cogip IMAGE=cortex-genimage ./build.py'
