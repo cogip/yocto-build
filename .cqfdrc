@@ -1,0 +1,6 @@
+[project]
+org='cogip'
+name='bsp'
+
+[build]
+command='python3 build.py'
