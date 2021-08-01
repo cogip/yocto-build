@@ -30,9 +30,9 @@ put anywhere in your path.
 To install repo:
 
 ```bash
-  $ mkdir ~/bin
-  $ echo "PATH=~/bin:\$PATH" >> ~/.bashrc && source .bashrc
-  $ curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+  $ mkdir ~/.bin
+  $ echo "PATH=~/.bin:\$PATH" >> ~/.bashrc && source ~/.bashrc
+  $ curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
 ```
 
 For more informations: https://gerrit.googlesource.com/git-repo/+/refs/heads/master/README.md
