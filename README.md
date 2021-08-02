@@ -66,6 +66,24 @@ To install cqfd:
 
 For more information: https://github.com/savoirfairelinux/cqfd
 
+## bmaptool ##
+
+From https://github.com/intel/bmap-tools:
+Bmaptool is a generic tool for creating the block map (bmap) for a file and
+copying files using the block map. The idea is that large files, like raw
+system image files, can be copied or flashed a lot faster and more reliably
+with bmaptool than with traditional tools, like dd or cp.
+
+To install bmaptool:
+
+```bash
+  $ sudo apt install bmap-tools
+```
+
+For more informations:
+* https://github.com/intel/bmap-tools
+* https://www.yoctoproject.org/docs/latest/dev-manual/dev-manual.html#flashing-images-using-bmaptool
+
 ### Retrieve the project ###
 
 #### Full project ####
@@ -145,4 +163,17 @@ bitbake and can be overriden too:
 
 ```bash
   $ cqfd run MACHINE=cogip-pi0-w DISTRO=cogip IMAGE=cortex-genimage ./build.py
+```
+
+### Flash project on target ###
+
+## Create SD card ##
+
+This chapter assumes that you have a working SD card reader.
+
+Use 'bmaptool' to copy the previously built image on the SD card (replace 'sdX'
+by your SD card device name):
+
+```bash
+  sudo bmaptool copy build/tmp/deploy/images/cogip-pi0-w/cortex-genimage-cogip-pi0-w.img.bmap /dev/sdX
 ```
