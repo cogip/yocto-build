@@ -1,10 +1,10 @@
-### Pre-requisites ###
+## Pre-requisites ##
 
 This documentation supports Ubuntu 20.04 LTS version.
 However command listed below should work with any recent debian-like Linux
 distribution.
 
-## git ##
+### git ###
 
 From https://git-scm.com/:
 Git is a free and open source distributed version control system designed to
@@ -18,14 +18,14 @@ To install git:
 
 For more informations: https://git-scm.com/
 
-## repo ##
+### repo ###
 
 From https://gerrit.googlesource.com/git-repo/:
 Repo is a tool built on top of Git. Repo helps manage many Git repositories,
 does the uploads to revision control systems, and automates parts of the
 development workflow. Repo is not meant to replace Git, only to make it easier
 to work with Git. The repo command is an executable Python script that you can
-put anywhere in your path.
+put anywhere in yoaur path.
 
 To install repo:
 
@@ -37,7 +37,7 @@ To install repo:
 
 For more informations: https://gerrit.googlesource.com/git-repo/+/refs/heads/master/README.md
 
-## Docker  ##
+### Docker  ###
 
 From https://docs.docker.com/get-started/overview/:
 Docker is an open platform for developing, shipping, and running applications.
@@ -50,7 +50,7 @@ To install docker:
 
 For more informations: https://www.docker.com/
 
-## cqfd ##
+### cqfd ###
 
 From https://github.com/savoirfairelinux/cqfd:
 cqfd provides a quick and convenient way to run commands in the current
@@ -66,7 +66,7 @@ To install cqfd:
 
 For more information: https://github.com/savoirfairelinux/cqfd
 
-## bmaptool ##
+### bmaptool ###
 
 From https://github.com/intel/bmap-tools:
 Bmaptool is a generic tool for creating the block map (bmap) for a file and
@@ -84,9 +84,9 @@ For more informations:
 * https://github.com/intel/bmap-tools
 * https://www.yoctoproject.org/docs/latest/dev-manual/dev-manual.html#flashing-images-using-bmaptool
 
-### Retrieve the project ###
+## Get the project ##
 
-#### Full project ####
+### Full project ###
 
 To get the COGIP full source tree :
 
@@ -97,7 +97,7 @@ To get the COGIP full source tree :
   $ cd cogip/pi
 ```
 
-#### Pi project ####
+### Pi project ###
 
 To get the COGIP pi project source tree only:
 
@@ -116,7 +116,7 @@ This has to be done only once unless the Dockerfile is modified:
   $ cqfd init
 ```
 
-### Build project ###
+## Build project ##
 
 To build COGIP Pi project for COGIP Raspberry Pi Zero WiFi:
 
@@ -124,9 +124,9 @@ To build COGIP Pi project for COGIP Raspberry Pi Zero WiFi:
   $ cqfd
 ```
 
-### Advanced build setup ###
+## Advanced build setup ##
 
-#### Launch commands through cqfd container ####
+### Launch commands through cqfd container ###
 
 Commands can be ran inside cqfd containers as for classical Docker containers.
 
@@ -138,7 +138,7 @@ Commands can be ran inside cqfd containers as for classical Docker containers.
   $ cqfd run whoami
 ```
 
-#### Launch Yocto commands through cqfd container ####
+### Launch Yocto commands through cqfd container ###
 
 Yocto commands are wrapped by 'build.py':
 
@@ -148,7 +148,7 @@ Yocto commands are wrapped by 'build.py':
   $ cqfd run ./build.py bash
 ```
 
-#### Advanced build confiuration ####
+### Advanced build confiuration ###
 
 By default build wrapper 'build.py' is building 'core-image-minimal' Yocto
 image.
@@ -165,9 +165,9 @@ bitbake and can be overriden too:
   $ cqfd run MACHINE=cogip-pi0-w DISTRO=cogip IMAGE=cortex-genimage ./build.py
 ```
 
-### Flash project on target ###
+## Flash project on target ##
 
-## Create SD card ##
+### Create SD card ###
 
 This chapter assumes that you have a working SD card reader.
 
