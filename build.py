@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
-import glob
 import os
+import subprocess
 import sys
 
+from pathlib import Path
 from subprocess import Popen, DEVNULL
 
 
@@ -28,36 +29,31 @@ class Yocto:
             ")
 
         # Find Yocto build environment setup script
-        oe_init_build_env = glob.glob(
-            "./layers/**/oe-init-build-env", recursive=True)
+        self.layer_path = Path('layers')
+        oe_init_build_env = list(self.layer_path.glob("**/oe-init-build-env"))
 
         # Only one script should exist
         assert len(oe_init_build_env) == 1, \
-            "Only one 'oe-init-build-env' can be used, several found: \n" \
-            + str(oe_init_build_env)
-        self.cmd_prefix = ". " + os.path.abspath(oe_init_build_env[0]) + " ; "
+            f"Only one 'oe-init-build-env' can be used, several found: {oe_init_build_env}\n"
+        self.cmd_prefix = f". {oe_init_build_env[0].resolve()};"
 
-        self._add_layers()
-
-    def _add_layers(self):
+    def add_layers(self):
         '''
         Parse all existing layers under layers/ directory and  add them to '<yocto_build_directory>/conf/bblayers.conf'.
         Display Yocto layers list successfully added.
         '''
 
-        layers = glob.glob(
-            "./layers/**/meta-*/conf/layer.conf", recursive=True)
-        layers = list(map(lambda x: os.path.abspath(
-            x.replace('/conf/layer.conf', '')), layers))
+        layers = self.layer_path.glob("**/meta-*/conf/layer.conf")
+        layers = [x.parent.parent.resolve() for x in layers]
 
         cmd = "bitbake-layers add-layer"
         for layer in layers:
-            cmd = cmd + " " + layer
+            cmd = f"{cmd} {layer}"
 
         self.run(cmd, console=True)
 
         for layer in layers:
-            print("Layer '" + layer + "' added.")
+            print(f"Layer '{layer}' added.")
 
     def run(self, cmd, console=False):
         '''
@@ -79,6 +75,7 @@ class Yocto:
 
 if __name__ == "__main__":
     yocto = Yocto()
+    yocto.add_layers()
     if len(sys.argv) > 1:
         yocto.run(' '.join(sys.argv[1:]), console=True)
     else:
