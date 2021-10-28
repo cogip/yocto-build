@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
 import os
+from pathlib import Path
 import subprocess
 import sys
 
-from pathlib import Path
-from subprocess import Popen, DEVNULL
-
-
 class Yocto:
+    SHELL = "/bin/bash"
+
     '''
     Yocto build wrapper.
 
@@ -63,15 +62,10 @@ class Yocto:
             cmd (str): Command to run.
             console (Boolean): Flag to display or not command outputs (stdout and stderr).
         '''
-        cmd = self.cmd_prefix + cmd
-        if console:
-            output = None
-        else:
-            output = DEVNULL
-        p = Popen(cmd, executable="/bin/bash",
-                  stdout=output, stderr=output, shell=True)
-        p.wait()
-
+        cmd = f'{self.cmd_prefix + cmd}'
+        subprocess.run(cmd, shell=True, check=True, executable=Yocto.SHELL,
+                capture_output=(not console)
+                )
 
 if __name__ == "__main__":
     yocto = Yocto()
