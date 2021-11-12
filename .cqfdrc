@@ -4,3 +4,7 @@ name='bsp'
 
 [build]
 command='MACHINE=cogip-pi0-w DISTRO=cogip IMAGE=cortex-genimage ./build.py'
+flavors="cortex-genimage_cogip-odroid-xu4"
+
+[cortex-genimage_cogip-odroid-xu4]
+command='MACHINE=cogip-odroid-xu4 DISTRO=cogip IMAGE=cortex-genimage ./build.py'
