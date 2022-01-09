@@ -86,27 +86,7 @@ For more informations:
 
 ## Get the project ##
 
-### Full project ###
-
-To get the COGIP full source tree :
-
-```bash
-  $ mkdir cogip/ -p && cd cogip/
-  $ repo init -u git@github.com:cogip/cogip-manifest.git -m cogip-manifest.xml
-  $ repo sync
-  $ cd cogip/pi
-```
-
-### Pi project ###
-
-To get the COGIP pi project source tree only:
-
-```bash
-  $ mkdir cogip/ -p && cd cogip/
-  $ repo init -u git@github.com:cogip/cogip-manifest.git -m cogip-pi.xml
-  $ repo sync
-  $ cd cogip/pi
-```
+Refer to https://github.com/cogip/cogip-manifest
 
 ### Build cqfd docker image ###
 
