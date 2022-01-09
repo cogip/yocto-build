@@ -162,7 +162,7 @@ MACHINE and DISTRO are respectively set by default to 'x86_64' and 'poky' by
 bitbake and can be overriden too:
 
 ```bash
-  $ cqfd run MACHINE=cogip-pi0-w DISTRO=cogip IMAGE=cortex-genimage ./build.py
+  $ cqfd run MACHINE=cogip-raspberrypi0-wifi DISTRO=cogip IMAGE=cortex-genimage ./build.py
 ```
 
 ## Flash project on target ##
@@ -175,5 +175,5 @@ Use 'bmaptool' to copy the previously built image on the SD card (replace 'sdX'
 by your SD card device name):
 
 ```bash
-  sudo bmaptool copy build/tmp/deploy/images/cogip-pi0-w/cortex-genimage-cogip-pi0-w.img.bmap /dev/sdX
+  sudo bmaptool copy build/tmp/deploy/images/cogip-raspberrypi0-wifi/cortex-genimage-cogip-raspberrypi0-wifi.img.bmap /dev/sdX
 ```
