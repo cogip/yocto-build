@@ -16,10 +16,12 @@ RUN apt-get update \
         cpio \
         debianutils \
         diffstat \
+        file \
         gawk \
         gcc \
         git \
         iputils-ping \
+        lz4 \
         libegl1-mesa \
         libncurses5-dev \
         libsdl1.2-dev \
@@ -38,8 +40,10 @@ RUN apt-get update \
         unzip \
         wget \
         xterm \
-        xz-utils
+        zstd
 
 # Configure locales
 RUN locale-gen en_US.UTF-8 \
     && dpkg-reconfigure locales
+
+RUN git config --system --add safe.directory '*'

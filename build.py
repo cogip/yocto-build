@@ -19,7 +19,7 @@ class Yocto:
     def __init__(self):
         self.image = os.environ.get('IMAGE', 'core-image-minimal')
         # Set allowed Yocto environment variables
-        os.environ['BB_ENV_EXTRAWHITE'] = os.environ.get('BB_ENV_EXTRAWHITE', " \
+        os.environ['BB_ENV_PASSTHROUGH_ADDITIONS'] = os.environ.get('BB_ENV_PASSTHROUGH_ADDITIONS', " \
                 DISTRO \
                 DL_DIR \
                 MACHINE \

@@ -4,10 +4,16 @@ name='bsp'
 
 [build]
 command='MACHINE=cogip-raspberrypi0-wifi DISTRO=cogip IMAGE=cortex-genimage ./build.py'
-flavors="cortex-genimage_cogip-odroid-xu4 cortex-genimage_cogip-raspberrypi0-wifi"
+flavors="cortex-genimage_cogip-odroid-xu4 cortex-genimage_cogip-raspberrypi0-wifi cortex-genimage_cogip-raspberrypi4-64 cortex-dbg-genimage_cogip-raspberrypi4-64"
 
 [cortex-genimage_cogip-odroid-xu4]
 command='MACHINE=cogip-odroid-xu4 DISTRO=cogip IMAGE=cortex-genimage ./build.py'
 
 [cortex-genimage_cogip-raspberrypi0-wifi]
 command='MACHINE=cogip-raspberrypi0-wifi DISTRO=cogip IMAGE=cortex-genimage ./build.py'
+
+[cortex-genimage_cogip-raspberrypi4-64]
+command='MACHINE=cogip-raspberrypi4-64 DISTRO=cogip IMAGE=cortex-genimage ./build.py'
+
+[cortex-dbg-genimage_cogip-raspberrypi4-64]
+command='MACHINE=cogip-raspberrypi4-64 DISTRO=cogip IMAGE=cortex-dbg-genimage ./build.py'
