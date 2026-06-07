@@ -1,0 +1,18 @@
+# kas-managed clones (restored from kas-cogip.lock.yml)
+/poky/
+/meta-openembedded/
+/meta-raspberrypi/
+/meta-webkit/
+/meta-virtualization/
+
+# cogip layers: independent git repos checked out here for the build
+/layers/
+
+# bitbake build output
+/build/
+
+# uv venv
+/.venv/
+
+# local kas overlay: per-deployment values + secrets (Wi-Fi PSK)
+/kas-local.yml

@@ -1,0 +1,121 @@
+header:
+  version: 14
+
+distro: cogip
+machine: raspberrypi4-64
+target: cogip-kiosk-image
+
+# Build-time variables passed through to bitbake. Values here are
+# DEFAULTS; the calling environment (Makefile / shell) overrides them,
+# so secrets never need to live in this committed file. kas adds these
+# to BB_ENV_PASSTHROUGH_ADDITIONS automatically.
+env:
+  KIOSK_URL: "http://localhost:8080"
+  # Wi-Fi credentials. Leave SSID empty to ship an Ethernet-only image.
+  # WLAN_PSK is the hashed PSK from `wpa_passphrase SSID passphrase`
+  # (the 64-hex value), NOT the plaintext passphrase.
+  WLAN_SSID: ""
+  WLAN_PSK: ""
+  # Cogip role: 0 = beacon (server-beacon + dashboard + beaconcam),
+  # 1-5 = robot (server + planner + copilot + detector + ...). Selects
+  # which cogip@ tool services are enabled. Default beacon (simplest).
+  ROBOT_ID: "0"
+
+repos:
+  # Cogip layers: each is its own git repo. Cloned/checked out under
+  # layers/ (gitignored here) so they sit inside the kas work dir and are
+  # visible to kas-container. The commit is pinned in kas-cogip.lock.yml
+  # for reproducibility. To hack on a layer, edit + commit in
+  # layers/meta-cogip-* and push its feat/yocto-cogip branch (or refresh
+  # the lock with `kas dump --lock --update --inplace`).
+  meta-cogip-bsp:
+    url: https://github.com/cogip/meta-cogip-bsp.git
+    branch: feat/yocto-cogip
+    path: layers/meta-cogip-bsp
+  meta-cogip-distro:
+    url: https://github.com/cogip/meta-cogip-distro.git
+    branch: feat/yocto-cogip
+    path: layers/meta-cogip-distro
+  meta-cogip-app:
+    url: https://github.com/cogip/meta-cogip-app.git
+    branch: feat/yocto-cogip
+    path: layers/meta-cogip-app
+
+  poky:
+    url: https://git.yoctoproject.org/poky
+    branch: scarthgap
+    layers:
+      meta:
+      meta-poky:
+      meta-yocto-bsp:
+
+  meta-openembedded:
+    url: https://git.openembedded.org/meta-openembedded
+    branch: scarthgap
+    layers:
+      meta-oe:
+      meta-python:
+      meta-networking:
+      meta-multimedia:
+      # Required by meta-virtualization's LAYERDEPENDS (docker stack).
+      meta-filesystems:
+
+  meta-raspberrypi:
+    url: https://git.yoctoproject.org/meta-raspberrypi
+    branch: scarthgap
+    layers:
+      .:
+
+  meta-webkit:
+    url: https://github.com/Igalia/meta-webkit
+    branch: scarthgap
+    layers:
+      .:
+
+  meta-virtualization:
+    url: https://git.yoctoproject.org/meta-virtualization
+    branch: scarthgap
+    layers:
+      .:
+
+local_conf_header:
+  cogip: |
+    INHERIT += "rm_work"
+    # Compiler cache: hashes preprocessed sources and reuses object
+    # files across rebuilds. Big win while iterating on WebKit feature
+    # flags (a CMake change re-runs configure + recompile; ccache makes
+    # the recompile mostly cache hits). Cache lives in CCACHE_DIR below,
+    # outside tmp/ so it survives `make clean`.
+    INHERIT += "ccache"
+    CCACHE_TOP_DIR = "${TOPDIR}/ccache"
+    CCACHE_MAXSIZE = "20G"
+    # Use 3/4 of the available cores (min 1). An unbounded
+    # BB_NUMBER_THREADS x PARALLEL_MAKE saturates RAM on the heavy
+    # WebKit C++ links and reboots the machine; 3/4 leaves headroom.
+    BB_NUMBER_THREADS = "${@max(1, oe.utils.cpu_count() * 3 // 4)}"
+    PARALLEL_MAKE = "-j ${@max(1, oe.utils.cpu_count() * 3 // 4)}"
+    # WebKit links are the memory killers (each peaks at several GB).
+    # WebKit ignores CMake job pools, so the only effective lever is its
+    # ninja -j. Override PARALLEL_MAKE for this recipe only, to the more
+    # conservative of a core-based (cores/4 + 1) and a memory-based
+    # ((MemTotal_MB - 4096) / 2560, ~2.5 GB/job + 4 GB OS headroom) limit.
+    # 20-core/27 GB host -> min(6, 9) = 6.
+    PARALLEL_MAKE:pn-wpewebkit = "-j ${@max(1, min(oe.utils.cpu_count() // 4 + 1, (int(open('/proc/meminfo').readline().split()[1]) // 1024 - 4096) // 2560))}"
+    # Memory-pressure safety net (Linux PSI): bitbake stops launching
+    # new tasks while memory stall pressure exceeds this threshold
+    # (microseconds stalled per polling window). Lower = more cautious.
+    BB_PRESSURE_MAX_MEMORY = "5000"
+    # Note: WebKit *feature* policy (dropping the GStreamer media stack,
+    # disabling WebCodecs) is application policy and lives in
+    # meta-cogip-app's wpewebkit bbappend, not here. This block keeps
+    # only host-build tuning.
+    CONF_VERSION = "2"
+    # Accept the Raspberry Pi GPU EULA (closed-source firmware).
+    LICENSE_FLAGS_ACCEPTED += "synaptics-killswitch"
+    # Lift the kas-provided environment variables into bitbake vars so
+    # recipes (cog-service, cogip-net) can read them. The env block
+    # above supplies the defaults / overrides.
+    KIOSK_URL := "${@os.getenv('KIOSK_URL', 'http://localhost:8080')}"
+    WLAN_SSID := "${@os.getenv('WLAN_SSID', '')}"
+    WLAN_PSK := "${@os.getenv('WLAN_PSK', '')}"
+    ROBOT_ID := "${@os.getenv('ROBOT_ID', '0')}"

@@ -1,0 +1,27 @@
+# Local kas overlay -- copy to kas-local.yml and fill in.
+#
+#   cp kas-local.yml.example kas-local.yml
+#   $EDITOR kas-local.yml
+#   make build        # picks up kas-local.yml automatically
+#
+# kas-local.yml is gitignored: it is the place for per-deployment
+# values and secrets (Wi-Fi PSK) that must NOT be committed. Values
+# here override the defaults in kas-cogip.yml.
+
+header:
+  version: 14
+
+env:
+  # Role: 0 = beacon, 1-5 = robot. Selects the cogip@ services enabled
+  # and the dashboard/server URL. The kiosk URL below must match
+  # (beacon dashboard = :8080, robot X dashboard = :808X).
+  ROBOT_ID: "0"
+
+  # URL the kiosk opens at boot (served locally on the Pi).
+  KIOSK_URL: "http://localhost:8080"
+
+  # Wi-Fi. Leave SSID empty for an Ethernet-only image.
+  # WLAN_PSK is the hashed PSK, not the plaintext passphrase:
+  #   wpa_passphrase "MySSID" "my passphrase" | sed -n 's/\tpsk=//p'
+  WLAN_SSID: "MySSID"
+  WLAN_PSK: "0000000000000000000000000000000000000000000000000000000000000000"

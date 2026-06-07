@@ -1,0 +1,20 @@
+header:
+  version: 14
+overrides:
+  repos:
+    poky:
+      commit: d4576e3c081a7ee7b57d48421c4c4f491cb4defe
+    meta-openembedded:
+      commit: d8cc4e44001c7257273d290ce8c4496e93d32841
+    meta-raspberrypi:
+      commit: 167703d5618498bb7feeaedf18e61be7a8246d1b
+    meta-webkit:
+      commit: 2d29669a3d78e462276044f3f8bde0e4dec33696
+    meta-virtualization:
+      commit: 89da4f56b4c510059f8dc1527d289d9fd4fef133
+    meta-cogip-bsp:
+      commit: 3e9b21740be34dfae66f64b508880cdea22a8903
+    meta-cogip-distro:
+      commit: 0589aea2404132f992177e8017ae3b9ff486ec09
+    meta-cogip-app:
+      commit: 3d29c0cdee5c0a1c91279da38d4a0d6783b157b7
