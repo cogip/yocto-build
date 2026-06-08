@@ -10,6 +10,18 @@ IMAGE            ?= cogip-kiosk-image
 MACHINE          ?= raspberrypi4-64
 SDCARD_DEV       ?= /dev/mmcblk0
 
+# Shared, persistent Yocto caches kept OUTSIDE the build dir so they
+# survive `make distclean` and are reused across projects. kas-container
+# bind-mounts DL_DIR -> /downloads and SSTATE_DIR -> /sstate natively
+# (it reads these env vars). ccache has no native support, so it is
+# bind-mounted explicitly via --runtime-args and CCACHE_TOP_DIR=/ccache
+# (set in kas-cogip.yml).
+YOCTO_CACHE      ?= $(HOME)/.yocto
+export DL_DIR    := $(YOCTO_CACHE)/downloads
+export SSTATE_DIR := $(YOCTO_CACHE)/sstate-cache
+CCACHE_HOST      := $(YOCTO_CACHE)/ccache
+KAS_RUNTIME      := --runtime-args "-v $(CCACHE_HOST):/ccache"
+
 # Pre-built Cogip app container image (built out-of-band, embedded in the
 # rootfs by meta-cogip-app's cogip-app-image recipe). REPO_ROOT is the
 # cogip-tools checkout that holds the Dockerfile / docker-compose.yml.
@@ -35,8 +47,11 @@ KAS              := $(VENV_DIR)/bin/kas
 USE_CONTAINER    ?= 1
 ifeq ($(USE_CONTAINER),1)
 KAS_CMD          := $(VENV_DIR)/bin/kas-container
+# Extra docker mount for the shared ccache (container mode only).
+KAS_RUNTIME_FLAG := $(KAS_RUNTIME)
 else
 KAS_CMD          := $(KAS)
+KAS_RUNTIME_FLAG :=
 endif
 # Prefer uv in $PATH; fall back to the default install location used by
 # the official installer (~/.local/bin/uv) so the bootstrap works in
@@ -106,10 +121,12 @@ build: $(KAS)
 	  echo "Build the container image first:  make app-image" >&2; \
 	  exit 1; \
 	fi
-	$(KAS_CMD) build $(KAS_CONFIG)
+	@mkdir -p $(CCACHE_HOST)
+	$(KAS_CMD) $(KAS_RUNTIME_FLAG) build $(KAS_CONFIG)
 
 shell: $(KAS)
-	$(KAS_CMD) shell $(KAS_CONFIG)
+	@mkdir -p $(CCACHE_HOST)
+	$(KAS_CMD) $(KAS_RUNTIME_FLAG) shell $(KAS_CONFIG)
 
 flash: $(WIC_IMAGE)
 	@if [ ! -b "$(SDCARD_DEV)" ]; then \

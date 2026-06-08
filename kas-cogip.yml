@@ -81,13 +81,14 @@ repos:
 local_conf_header:
   cogip: |
     INHERIT += "rm_work"
-    # Compiler cache: hashes preprocessed sources and reuses object
-    # files across rebuilds. Big win while iterating on WebKit feature
-    # flags (a CMake change re-runs configure + recompile; ccache makes
-    # the recompile mostly cache hits). Cache lives in CCACHE_DIR below,
-    # outside tmp/ so it survives `make clean`.
+    # Compiler cache: hashes preprocessed sources and reuses object files
+    # across rebuilds. Stored in the shared, persistent /ccache mount
+    # (host ~/.yocto/ccache, bind-mounted by the Makefile via
+    # --runtime-args), so it survives distclean and is reused across
+    # projects -- alongside DL_DIR (/downloads) and SSTATE_DIR (/sstate),
+    # which kas-container mounts natively.
     INHERIT += "ccache"
-    CCACHE_TOP_DIR = "${TOPDIR}/ccache"
+    CCACHE_TOP_DIR = "/ccache"
     CCACHE_MAXSIZE = "20G"
     # Use 3/4 of the available cores (min 1). An unbounded
     # BB_NUMBER_THREADS x PARALLEL_MAKE saturates RAM on the heavy
