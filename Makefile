@@ -22,13 +22,16 @@ export SSTATE_DIR := $(YOCTO_CACHE)/sstate-cache
 CCACHE_HOST      := $(YOCTO_CACHE)/ccache
 KAS_RUNTIME      := --runtime-args "-v $(CCACHE_HOST):/ccache"
 
-# Pre-built Cogip app container image (built out-of-band, embedded in the
-# rootfs by meta-cogip-app's cogip-app-image recipe). REPO_ROOT is the
-# cogip-tools checkout that holds the Dockerfile / docker-compose.yml.
-REPO_ROOT        ?= ../cogip-tools
+# Pre-built Cogip app container image. `make app-image` builds it from
+# the cogip-tools Dockerfile and drops the tarball into DL_DIR; the
+# cogip-app-image recipe embeds it (checksum pinned in
+# meta-cogip-app/.../cogip-app-image.inc). cogip-tools is only read,
+# never modified: point COGIP_TOOLS_PATH at your checkout (default
+# ../cogip-tools).
+COGIP_TOOLS_PATH ?= ../cogip-tools
 APP_IMAGE_TAG    ?= cogip/cogip-tools:console
-APP_IMAGE_DIR    := layers/meta-cogip-app/files-prebuilt
-APP_IMAGE_TAR    := $(APP_IMAGE_DIR)/cogip-app.image.tar.zst
+APP_IMAGE_TAR    := $(DL_DIR)/cogip-app.image.tar.zst
+APP_IMAGE_INC    := layers/meta-cogip-app/recipes-cogip/cogip-app-image/cogip-app-image.inc
 
 # kas merges colon-separated configs, later ones overriding earlier.
 # Append the local overlay automatically when present so its env block
@@ -101,24 +104,29 @@ $(UV):
 $(KAS): $(UV) pyproject.toml
 	$(UV) sync
 
-# Build the arm64 cogip-console container from the repo Dockerfile and
-# save it (zstd-compressed) where the cogip-app-image recipe expects it.
-# Run on the dev host / CI before `make build`. Uses buildx + QEMU for
-# cross-platform if the host is not arm64.
+# Build the arm64 cogip-console container from the cogip-tools Dockerfile
+# (COGIP_TOOLS_PATH, read-only), save it (zstd) into DL_DIR, and pin its
+# checksum in cogip-app-image.inc so the recipe (and provenance) follow.
+# Uses buildx + QEMU for cross-build when the host is not arm64.
 app-image:
-	@mkdir -p $(APP_IMAGE_DIR)
+	@test -f "$(COGIP_TOOLS_PATH)/Dockerfile" || { \
+	  echo "ERROR: no Dockerfile at COGIP_TOOLS_PATH=$(COGIP_TOOLS_PATH)" >&2; \
+	  echo "Point COGIP_TOOLS_PATH at your cogip-tools checkout." >&2; exit 1; }
+	@mkdir -p $(DL_DIR)
 	docker buildx build --platform linux/arm64 \
 	    --target cogip-console \
 	    -t $(APP_IMAGE_TAG) \
 	    --load \
-	    $(REPO_ROOT)
+	    $(COGIP_TOOLS_PATH)
 	docker save $(APP_IMAGE_TAG) | zstd -T0 -19 -o $(APP_IMAGE_TAR)
-	@echo "Saved $(APP_IMAGE_TAR) ($$(du -h $(APP_IMAGE_TAR) | cut -f1))"
+	@sha=$$(sha256sum $(APP_IMAGE_TAR) | cut -d' ' -f1); \
+	 sed -i "s/^COGIP_APP_IMAGE_SHA256 = .*/COGIP_APP_IMAGE_SHA256 = \"$$sha\"/" $(APP_IMAGE_INC); \
+	 echo "Saved $(APP_IMAGE_TAR) ($$(du -h $(APP_IMAGE_TAR) | cut -f1)), sha256 $$sha pinned in cogip-app-image.inc"
 
 build: $(KAS)
 	@if [ ! -f "$(APP_IMAGE_TAR)" ]; then \
-	  echo "ERROR: $(APP_IMAGE_TAR) is missing." >&2; \
-	  echo "Build the container image first:  make app-image" >&2; \
+	  echo "ERROR: $(APP_IMAGE_TAR) is missing (DL_DIR has no container image)." >&2; \
+	  echo "Build it first:  make app-image" >&2; \
 	  exit 1; \
 	fi
 	@mkdir -p $(CCACHE_HOST)

@@ -17,4 +17,4 @@ overrides:
     meta-cogip-distro:
       commit: 0589aea2404132f992177e8017ae3b9ff486ec09
     meta-cogip-app:
-      commit: 3d29c0cdee5c0a1c91279da38d4a0d6783b157b7
+      commit: 581a17aa6a9730797f77e5f5df0929282bd56d39
