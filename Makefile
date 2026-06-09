@@ -61,10 +61,12 @@ endif
 # the same `make setup` invocation that installed it.
 UV               := $(shell command -v uv 2>/dev/null || echo $(HOME)/.local/bin/uv)
 
-# Find the wic image produced by the build. The deploy dir is tmp-glibc
-# (glibc distro) and the image carries a .rootfs infix; use the stable
-# symlink Yocto maintains to the latest build.
-WIC_IMAGE        = $(BUILD_DIR)/tmp-glibc/deploy/images/$(MACHINE)/$(IMAGE)-$(MACHINE).rootfs.wic.bz2
+# Find the wic image + its block map produced by the build. The deploy
+# dir is tmp-glibc (glibc distro) and the image carries a .rootfs infix;
+# use the stable symlinks Yocto maintains to the latest build.
+DEPLOY_DIR       = $(BUILD_DIR)/tmp-glibc/deploy/images/$(MACHINE)
+WIC_IMAGE        = $(DEPLOY_DIR)/$(IMAGE)-$(MACHINE).rootfs.wic.bz2
+WIC_BMAP         = $(DEPLOY_DIR)/$(IMAGE)-$(MACHINE).rootfs.wic.bmap
 
 .PHONY: help setup build shell flash clean distclean app-image
 
@@ -74,7 +76,7 @@ help:
 	@echo "  app-image build the arm64 cogip container + save it for embedding"
 	@echo "  build     build the kiosk image (default target)"
 	@echo "  shell     enter a kas/bitbake shell"
-	@echo "  flash     write the built .wic.bz2 to SDCARD_DEV ($(SDCARD_DEV))"
+	@echo "  flash     bmaptool the built image to SDCARD_DEV ($(SDCARD_DEV))"
 	@echo "  clean     remove build/tmp"
 	@echo "  distclean wipe entire $(BUILD_DIR) (forces full re-fetch)"
 	@echo ""
@@ -141,7 +143,12 @@ flash: $(WIC_IMAGE)
 	  echo "$(SDCARD_DEV) is not a block device. Set SDCARD_DEV=/dev/..." >&2; \
 	  exit 1; \
 	fi
-	bzip2 -dc $(WIC_IMAGE) | sudo dd of=$(SDCARD_DEV) bs=4M status=progress conv=fsync
+	@command -v bmaptool >/dev/null 2>&1 || { \
+	  echo "bmaptool not found: sudo apt install bmap-tools" >&2; exit 1; }
+	# bmaptool decompresses the .wic.bz2 on the fly, writes only mapped
+	# blocks (fast, skips the mostly-empty data partition) and verifies
+	# the sha256 of each block against the .bmap.
+	sudo bmaptool copy --bmap $(WIC_BMAP) $(WIC_IMAGE) $(SDCARD_DEV)
 	sync
 
 clean:
