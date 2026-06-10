@@ -145,6 +145,14 @@ flash: $(WIC_IMAGE)
 	fi
 	@command -v bmaptool >/dev/null 2>&1 || { \
 	  echo "bmaptool not found: sudo apt install bmap-tools" >&2; exit 1; }
+	# Unmount any auto-mounted partition of the target disk first, so
+	# bmaptool writes to a quiescent device. lsblk lists the disk then its
+	# partitions (full paths); skip the disk line, umount the rest.
+	@for part in $$(lsblk -lnpo NAME $(SDCARD_DEV) | tail -n +2); do \
+	  if findmnt -rn -S "$$part" >/dev/null 2>&1; then \
+	    echo "unmounting $$part"; sudo umount "$$part" || exit 1; \
+	  fi; \
+	done
 	# bmaptool decompresses the .wic.bz2 on the fly, writes only mapped
 	# blocks (fast, skips the mostly-empty data partition) and verifies
 	# the sha256 of each block against the .bmap.
