@@ -20,25 +20,29 @@ env:
   # 1-5 = robot (server + planner + copilot + detector + ...). Selects
   # which cogip@ tool services are enabled. Default beacon (simplest).
   ROBOT_ID: "0"
+  # 1 = include the Docker / cogip-tools application stack; 0 = bare
+  # kiosk (Cog + networking only, no Docker, no app tarball needed).
+  COGIP_APP: "1"
 
 repos:
-  # Cogip layers: each is its own git repo. Cloned/checked out under
-  # layers/ (gitignored here) so they sit inside the kas work dir and are
-  # visible to kas-container. The commit is pinned in kas-cogip.lock.yml
-  # for reproducibility. To hack on a layer, edit + commit in
-  # layers/meta-cogip-* and push its feat/yocto-cogip branch (or refresh
-  # the lock with `kas dump --lock --update --inplace`).
+  # Cogip layers: each is its own git repo, checked out under layers/
+  # (gitignored here) so it sits inside the kas work dir and is visible
+  # to kas-container. Referenced by local PATH so kas uses the checkout
+  # as-is -- you edit + commit in layers/meta-cogip-* and build without
+  # pushing. (kas does not manage their git: no fetch/reset, no
+  # branch-contains check that would reject unpushed local commits.)
+  #
+  # For a standalone / CI-reproducible build, pin each to the remote
+  # instead and regenerate the lock once the layers are pushed:
+  #   meta-cogip-app:
+  #     url: https://github.com/cogip/meta-cogip-app.git
+  #     branch: feat/yocto-cogip
+  #     path: layers/meta-cogip-app
   meta-cogip-bsp:
-    url: https://github.com/cogip/meta-cogip-bsp.git
-    branch: feat/yocto-cogip
     path: layers/meta-cogip-bsp
   meta-cogip-distro:
-    url: https://github.com/cogip/meta-cogip-distro.git
-    branch: feat/yocto-cogip
     path: layers/meta-cogip-distro
   meta-cogip-app:
-    url: https://github.com/cogip/meta-cogip-app.git
-    branch: feat/yocto-cogip
     path: layers/meta-cogip-app
 
   poky:
@@ -120,3 +124,4 @@ local_conf_header:
     WLAN_SSID := "${@os.getenv('WLAN_SSID', '')}"
     WLAN_PSK := "${@os.getenv('WLAN_PSK', '')}"
     ROBOT_ID := "${@os.getenv('ROBOT_ID', '0')}"
+    COGIP_APP := "${@os.getenv('COGIP_APP', '1')}"

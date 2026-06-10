@@ -16,3 +16,6 @@
 
 # local kas overlay: per-deployment values + secrets (Wi-Fi PSK)
 /kas-local.yml
+
+# generated COGIP_APP overlay
+/.kas-cogip-app.yml

@@ -3,7 +3,7 @@ header:
 overrides:
   repos:
     poky:
-      commit: d03f09df0ab0bf326ab1e0d0969f4643a9f8a378
+      commit: d4576e3c081a7ee7b57d48421c4c4f491cb4defe
     meta-openembedded:
       commit: d8cc4e44001c7257273d290ce8c4496e93d32841
     meta-raspberrypi:
@@ -12,9 +12,3 @@ overrides:
       commit: 2d29669a3d78e462276044f3f8bde0e4dec33696
     meta-virtualization:
       commit: 89da4f56b4c510059f8dc1527d289d9fd4fef133
-    meta-cogip-bsp:
-      commit: 3e9b21740be34dfae66f64b508880cdea22a8903
-    meta-cogip-distro:
-      commit: 0f36e9f80ad7d4ca54ac964ed28d56303c8e6278
-    meta-cogip-app:
-      commit: dd323a7ffbd0bfff5bbf0acba0da23cc92993ae6

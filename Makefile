@@ -33,11 +33,19 @@ APP_IMAGE_TAG    ?= cogip/cogip-tools:console
 APP_IMAGE_TAR    := $(DL_DIR)/cogip-app.image.tar.zst
 APP_IMAGE_INC    := layers/meta-cogip-app/recipes-cogip/cogip-app-image/cogip-app-image.inc
 
+# Include the Docker / cogip-tools app stack (1) or build a bare kiosk
+# (0: Cog + networking only, no Docker, no app tarball needed -- handy
+# for isolating Wi-Fi / display issues). Plumbed to bitbake via a
+# generated kas overlay (env-var passthrough does not cross
+# kas-container; only kas config env blocks do).
+COGIP_APP        ?= 1
+APP_OVERLAY      := .kas-cogip-app.yml
+
 # kas merges colon-separated configs, later ones overriding earlier.
-# Append the local overlay automatically when present so its env block
-# (KIOSK_URL, WLAN_SSID, WLAN_PSK) wins over kas-cogip.yml defaults.
+# Order: base, then the generated COGIP_APP overlay, then the local
+# overlay (KIOSK_URL/WLAN/ROBOT_ID) when present.
 LOCAL_CONFIG     := $(wildcard kas-local.yml)
-KAS_CONFIG       := $(BASE_CONFIG)$(if $(LOCAL_CONFIG),:$(LOCAL_CONFIG))
+KAS_CONFIG       := $(BASE_CONFIG):$(APP_OVERLAY)$(if $(LOCAL_CONFIG),:$(LOCAL_CONFIG))
 
 # Self-contained venv managed by uv. Activate by sourcing it, or just
 # call binaries through $(KAS) / $(KAS_CONTAINER) which already point
@@ -125,16 +133,23 @@ app-image:
 	 sed -i "s/^COGIP_APP_IMAGE_SHA256 = .*/COGIP_APP_IMAGE_SHA256 = \"$$sha\"/" $(APP_IMAGE_INC); \
 	 echo "Saved $(APP_IMAGE_TAR) ($$(du -h $(APP_IMAGE_TAR) | cut -f1)), sha256 $$sha pinned in cogip-app-image.inc"
 
-build: $(KAS)
-	@if [ ! -f "$(APP_IMAGE_TAR)" ]; then \
+# Regenerate the COGIP_APP overlay every invocation so the value tracks
+# the make variable (kas reads env blocks from config files, not the
+# calling environment, when running in a container).
+.PHONY: $(APP_OVERLAY)
+$(APP_OVERLAY):
+	@printf 'header:\n  version: 14\nenv:\n  COGIP_APP: "%s"\n' "$(COGIP_APP)" > $@
+
+build: $(KAS) $(APP_OVERLAY)
+	@if [ "$(COGIP_APP)" = "1" ] && [ ! -f "$(APP_IMAGE_TAR)" ]; then \
 	  echo "ERROR: $(APP_IMAGE_TAR) is missing (DL_DIR has no container image)." >&2; \
-	  echo "Build it first:  make app-image" >&2; \
+	  echo "Build it first:  make app-image   (or build a bare kiosk: make build COGIP_APP=0)" >&2; \
 	  exit 1; \
 	fi
 	@mkdir -p $(CCACHE_HOST)
 	$(KAS_CMD) $(KAS_RUNTIME_FLAG) build $(KAS_CONFIG)
 
-shell: $(KAS)
+shell: $(KAS) $(APP_OVERLAY)
 	@mkdir -p $(CCACHE_HOST)
 	$(KAS_CMD) $(KAS_RUNTIME_FLAG) shell $(KAS_CONFIG)
 
