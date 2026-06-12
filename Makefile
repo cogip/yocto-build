@@ -24,9 +24,9 @@ KAS_RUNTIME      := --runtime-args "-v $(CCACHE_HOST):/ccache"
 
 # Pre-built Cogip app container image. `make app-image` builds it from
 # the cogip-tools Dockerfile and drops the tarball into DL_DIR; the
-# cogip-app-image recipe embeds it (checksum pinned in
-# meta-cogip-app/.../cogip-app-image.inc). cogip-tools is only read,
-# never modified: point COGIP_TOOLS_PATH at your checkout (default
+# cogip-app-image recipe picks it up from there as a local file:// (no
+# checksum to pin, content-tracked). cogip-tools is only read, never
+# modified: point COGIP_TOOLS_PATH at your checkout (default
 # ../cogip-tools).
 COGIP_TOOLS_PATH ?= ../cogip-tools
 # Shipped image (deploy): cogip-console base + a self-contained /opt/.venv
@@ -37,7 +37,6 @@ APP_IMAGE_BASE_TAG ?= cogip/cogip-tools:console-base
 # Cross-compiled arm64 wheel produced by cogip-tools' build_wheel target.
 APP_WHEEL        ?= cogip_tools-1.0.0-cp313-abi3-linux_aarch64.whl
 APP_IMAGE_TAR    := $(DL_DIR)/cogip-app.image.tar.zst
-APP_IMAGE_INC    := layers/meta-cogip-app/recipes-cogip/cogip-app-image/cogip-app-image.inc
 
 # Include the Docker / cogip-tools app stack (1) or build a bare kiosk
 # (0: Cog + networking only, no Docker, no app tarball needed -- handy
@@ -156,9 +155,7 @@ app-image:
 	    .
 	rm -f ./$(APP_WHEEL)
 	docker save $(APP_IMAGE_TAG) | zstd -f -T0 -19 -o $(APP_IMAGE_TAR)
-	@sha=$$(sha256sum $(APP_IMAGE_TAR) | cut -d' ' -f1); \
-	 sed -i "s/^COGIP_APP_IMAGE_SHA256 = .*/COGIP_APP_IMAGE_SHA256 = \"$$sha\"/" $(APP_IMAGE_INC); \
-	 echo "Saved $(APP_IMAGE_TAR) ($$(du -h $(APP_IMAGE_TAR) | cut -f1)), sha256 $$sha pinned in cogip-app-image.inc"
+	@echo "Saved $(APP_IMAGE_TAR) ($$(du -h $(APP_IMAGE_TAR) | cut -f1)). cogip-app-image picks it up from DL_DIR (local file://, no checksum to pin)."
 
 # Regenerate the COGIP_APP overlay every invocation so the value tracks
 # the make variable (kas reads env blocks from config files, not the
