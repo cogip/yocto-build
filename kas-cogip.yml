@@ -117,6 +117,9 @@ local_conf_header:
     INHERIT += "ccache"
     CCACHE_TOP_DIR = "/ccache"
     CCACHE_MAXSIZE = "20G"
+    # Keep the hash-equivalence DB with the shared sstate (default on
+    # wrynose is the per-build dir, which defeats SSTATE_DIR reuse).
+    BB_HASHSERVE_DB_DIR = "${SSTATE_DIR}"
     # Use 3/4 of the available cores (min 1). An unbounded
     # BB_NUMBER_THREADS x PARALLEL_MAKE saturates RAM on the heavy
     # WebKit C++ links and reboots the machine; 3/4 leaves headroom.
