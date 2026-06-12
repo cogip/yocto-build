@@ -1,0 +1,32 @@
+# Cogip kiosk deploy image.
+#
+# Built on top of cogip/cogip-tools:console-base (Python + system libs +
+# locked deps). Adds a self-contained /opt/.venv with the COGIP tools
+# installed from the cross-compiled wheel, so the runtime needs no build
+# step on the board.
+#
+# The kiosk seeds this /opt/.venv onto the rootfs at first boot and
+# bind-mounts it back into the containers (/opt/.venv:/opt/.venv), so the
+# sources under /opt/.venv/lib/pythonX.Y/site-packages/cogip are editable
+# on the board -- same layout and workflow as the raspios deployment.
+# Installing the wheel (a regular, non-editable install) copies the
+# sources into site-packages, which is precisely what makes them
+# hand-editable; only .pyx/C++ changes would need a rebuild.
+ARG BASE=cogip/cogip-tools:console-base
+FROM ${BASE}
+
+# Cross-compiled arm64 wheel produced by cogip-tools' build_wheel target
+# (see the Makefile app-image step) and copied into the build context.
+ARG WHEEL=cogip_tools-1.0.0-cp313-abi3-linux_aarch64.whl
+COPY ${WHEEL} /tmp/${WHEEL}
+
+# /opt/.venv: locked runtime deps (offline, from uv.lock) + the COGIP
+# tools wheel (--no-deps so nothing is pulled from the network). uv.lock
+# / pyproject.toml live in /src (WORKDIR of the base image).
+RUN cd /src \
+ && UV_PROJECT_ENVIRONMENT=/opt/.venv uv venv --system-site-packages /opt/.venv \
+ && UV_PROJECT_ENVIRONMENT=/opt/.venv uv sync --no-dev --no-install-project --frozen \
+ && uv pip install --python /opt/.venv/bin/python --no-deps "/tmp/${WHEEL}" \
+ && rm -f "/tmp/${WHEEL}"
+
+CMD ["sleep", "infinity"]

@@ -29,7 +29,13 @@ KAS_RUNTIME      := --runtime-args "-v $(CCACHE_HOST):/ccache"
 # never modified: point COGIP_TOOLS_PATH at your checkout (default
 # ../cogip-tools).
 COGIP_TOOLS_PATH ?= ../cogip-tools
+# Shipped image (deploy): cogip-console base + a self-contained /opt/.venv
+# with the COGIP tools wheel installed. compose.yml references this tag.
 APP_IMAGE_TAG    ?= cogip/cogip-tools:console
+# Intermediate base built straight from the cogip-tools Dockerfile.
+APP_IMAGE_BASE_TAG ?= cogip/cogip-tools:console-base
+# Cross-compiled arm64 wheel produced by cogip-tools' build_wheel target.
+APP_WHEEL        ?= cogip_tools-1.0.0-cp313-abi3-linux_aarch64.whl
 APP_IMAGE_TAR    := $(DL_DIR)/cogip-app.image.tar.zst
 APP_IMAGE_INC    := layers/meta-cogip-app/recipes-cogip/cogip-app-image/cogip-app-image.inc
 
@@ -114,21 +120,42 @@ $(UV):
 $(KAS): $(UV) pyproject.toml
 	$(UV) sync
 
-# Build the arm64 cogip-console container from the cogip-tools Dockerfile
-# (COGIP_TOOLS_PATH, read-only), save it (zstd) into DL_DIR, and pin its
-# checksum in cogip-app-image.inc so the recipe (and provenance) follow.
-# Uses buildx + QEMU for cross-build when the host is not arm64.
+# Build the shipped Cogip app image and save it (zstd) into DL_DIR, then
+# pin its checksum in cogip-app-image.inc so the recipe / provenance
+# follow. cogip-tools is only ever READ (COGIP_TOOLS_PATH), never
+# modified. Three steps:
+#   1. Cross-compile the arm64 wheel with cogip-tools' own build_wheel
+#      service (debian + aarch64 cross-gcc -> fast, no QEMU C++ build).
+#   2. Build the cogip-console base (arm64) from the cogip-tools Dockerfile.
+#   3. Build the deploy image (Dockerfile.deploy): base + a /opt/.venv
+#      with the wheel installed, tagged as the shipped image.
 app-image:
 	@test -f "$(COGIP_TOOLS_PATH)/Dockerfile" || { \
 	  echo "ERROR: no Dockerfile at COGIP_TOOLS_PATH=$(COGIP_TOOLS_PATH)" >&2; \
 	  echo "Point COGIP_TOOLS_PATH at your cogip-tools checkout." >&2; exit 1; }
 	@mkdir -p $(DL_DIR)
+	# 1. Cross-compiled wheel -> $(COGIP_TOOLS_PATH)/dist/$(APP_WHEEL)
+	cd $(COGIP_TOOLS_PATH) && UID=$$(id -u) GID=$$(id -g) \
+	    docker compose run --rm --build build_wheel
+	@test -f "$(COGIP_TOOLS_PATH)/dist/$(APP_WHEEL)" || { \
+	  echo "ERROR: wheel not produced: $(COGIP_TOOLS_PATH)/dist/$(APP_WHEEL)" >&2; exit 1; }
+	# 2. cogip-console base
 	docker buildx build --platform linux/arm64 \
 	    --target cogip-console \
-	    -t $(APP_IMAGE_TAG) \
+	    -t $(APP_IMAGE_BASE_TAG) \
 	    --load \
 	    $(COGIP_TOOLS_PATH)
-	docker save $(APP_IMAGE_TAG) | zstd -T0 -19 -o $(APP_IMAGE_TAR)
+	# 3. deploy image (base + /opt/.venv with the wheel)
+	cp $(COGIP_TOOLS_PATH)/dist/$(APP_WHEEL) ./$(APP_WHEEL)
+	docker buildx build --platform linux/arm64 \
+	    -f Dockerfile.deploy \
+	    --build-arg BASE=$(APP_IMAGE_BASE_TAG) \
+	    --build-arg WHEEL=$(APP_WHEEL) \
+	    -t $(APP_IMAGE_TAG) \
+	    --load \
+	    .
+	rm -f ./$(APP_WHEEL)
+	docker save $(APP_IMAGE_TAG) | zstd -f -T0 -19 -o $(APP_IMAGE_TAR)
 	@sha=$$(sha256sum $(APP_IMAGE_TAR) | cut -d' ' -f1); \
 	 sed -i "s/^COGIP_APP_IMAGE_SHA256 = .*/COGIP_APP_IMAGE_SHA256 = \"$$sha\"/" $(APP_IMAGE_INC); \
 	 echo "Saved $(APP_IMAGE_TAR) ($$(du -h $(APP_IMAGE_TAR) | cut -f1)), sha256 $$sha pinned in cogip-app-image.inc"
