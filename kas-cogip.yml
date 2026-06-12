@@ -45,17 +45,38 @@ repos:
   meta-cogip-app:
     path: layers/meta-cogip-app
 
-  poky:
-    url: https://git.yoctoproject.org/poky
-    branch: scarthgap
+  # Base layers. poky no longer ships as the umbrella repo on wrynose, so
+  # clone its constituents independently: openembedded-core (the `meta`
+  # layer), bitbake (its own repo), and meta-yocto (meta-poky +
+  # meta-yocto-bsp).
+  # VERIFY ON FIRST BUILD: (1) the bitbake branch matching wrynose -- it
+  # is version-numbered, not codenamed; 2.18 is the newest. (2) that kas
+  # locates bitbake from this standalone repo (no `layers:` -> not a
+  # layer, just the bitbake tool).
+  bitbake:
+    url: https://git.openembedded.org/bitbake
+    branch: "2.18"
+    # bitbake is the build tool, not a layer: kas still clones it (and
+    # finds bitbake/bin/bitbake), but must NOT add its root to bblayers.
+    layers:
+      .: disabled
+
+  openembedded-core:
+    url: https://git.openembedded.org/openembedded-core
+    branch: wrynose
     layers:
       meta:
+
+  meta-yocto:
+    url: https://git.yoctoproject.org/meta-yocto
+    branch: wrynose
+    layers:
       meta-poky:
       meta-yocto-bsp:
 
   meta-openembedded:
     url: https://git.openembedded.org/meta-openembedded
-    branch: scarthgap
+    branch: wrynose
     layers:
       meta-oe:
       meta-python:
@@ -64,21 +85,23 @@ repos:
       # Required by meta-virtualization's LAYERDEPENDS (docker stack).
       meta-filesystems:
 
+  # No wrynose branch yet; master tracks the upcoming release.
   meta-raspberrypi:
     url: https://git.yoctoproject.org/meta-raspberrypi
-    branch: scarthgap
+    branch: master
     layers:
       .:
 
+  # Igalia's wrynose-in-progress branch (no stable wrynose yet).
   meta-webkit:
     url: https://github.com/Igalia/meta-webkit
-    branch: scarthgap
+    branch: next-wrynose
     layers:
       .:
 
   meta-virtualization:
     url: https://git.yoctoproject.org/meta-virtualization
-    branch: scarthgap
+    branch: wrynose
     layers:
       .:
 
@@ -97,8 +120,8 @@ local_conf_header:
     # Use 3/4 of the available cores (min 1). An unbounded
     # BB_NUMBER_THREADS x PARALLEL_MAKE saturates RAM on the heavy
     # WebKit C++ links and reboots the machine; 3/4 leaves headroom.
-    BB_NUMBER_THREADS = "${@max(1, oe.utils.cpu_count() * 3 // 4)}"
-    PARALLEL_MAKE = "-j ${@max(1, oe.utils.cpu_count() * 3 // 4)}"
+    BB_NUMBER_THREADS = "${@max(1, oe.utils.cpu_count() * 1 // 2)}"
+    PARALLEL_MAKE = "-j ${@max(1, oe.utils.cpu_count() * 1 // 2)}"
     # WebKit links are the memory killers (each peaks at several GB).
     # WebKit ignores CMake job pools, so the only effective lever is its
     # ninja -j. Override PARALLEL_MAKE for this recipe only, to the more
@@ -109,7 +132,7 @@ local_conf_header:
     # Memory-pressure safety net (Linux PSI): bitbake stops launching
     # new tasks while memory stall pressure exceeds this threshold
     # (microseconds stalled per polling window). Lower = more cautious.
-    BB_PRESSURE_MAX_MEMORY = "5000"
+    BB_PRESSURE_MAX_MEMORY = "16000"
     # Note: WebKit *feature* policy (dropping the GStreamer media stack,
     # disabling WebCodecs) is application policy and lives in
     # meta-cogip-app's wpewebkit bbappend, not here. This block keeps
