@@ -188,6 +188,11 @@ build: $(KAS) $(APP_OVERLAY)
 	  echo "Build it first:  make app-image   (or build a bare kiosk: make build COGIP_APP=0)" >&2; \
 	  exit 1; \
 	fi
+	@if [ "$(COGIP_APP)" = "1" ] && [ ! -f "$(APP_DATA_EXT4)" ]; then \
+	  echo "ERROR: $(APP_DATA_EXT4) is missing (pre-loaded /data image)." >&2; \
+	  echo "Build it first:  make app-data   (needs 'make app-image' first)" >&2; \
+	  exit 1; \
+	fi
 	@if [ "$(COGIP_APP)" = "1" ]; then \
 	  test -f "$(APP_CONFIG_ENV)" && test -f "$(APP_ENV_TEMPLATE)" || { \
 	    echo "ERROR: cogip-tools role env sources missing under $(COGIP_TOOLS_PATH)/raspios." >&2; \
