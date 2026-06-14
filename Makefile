@@ -40,6 +40,10 @@ APP_IMAGE_TAR    := $(DL_DIR)/cogip-app.image.tar.zst
 # Editable venv exported from the image, pre-shipped on the rootfs by the
 # cogip-app-venv recipe (no first-boot 'docker cp' seed).
 APP_VENV_TAR     := $(DL_DIR)/cogip-venv.tar.zst
+# /data partition image with the container image pre-loaded into the Docker
+# store, so the Pi skips the slow `docker load` at first boot (built by
+# `sudo make app-data`; baked into /data by wic).
+APP_DATA_EXT4    := $(DL_DIR)/cogip-data.ext4
 
 # Per-role environment sources, staged from cogip-tools/raspios into
 # DL_DIR for the cogip-environment recipe (single source of truth, DRY:
@@ -198,6 +202,17 @@ build: $(KAS) $(APP_OVERLAY)
 shell: $(KAS) $(APP_OVERLAY)
 	@mkdir -p $(CCACHE_HOST)
 	$(KAS_CMD) $(KAS_RUNTIME_FLAG) shell $(KAS_CONFIG)
+
+# Build the /data partition image (cogip-data.ext4) with the container
+# image pre-loaded into a Docker overlay2 store, so first boot skips the
+# slow `docker load`. The script needs root (transient dockerd + mke2fs)
+# and is sudo'd here, so run `make app-data` (NOT `sudo make`, which would
+# resolve DL_DIR under /root). Requires `make app-image` first.
+app-data:
+	@test -f "$(APP_IMAGE_TAR)" || { \
+	  echo "ERROR: $(APP_IMAGE_TAR) missing. Run 'make app-image' first." >&2; exit 1; }
+	@mkdir -p $(DL_DIR)
+	sudo scripts/build-data-ext4.sh "$(APP_IMAGE_TAR)" "$(APP_DATA_EXT4)" "$(APP_IMAGE_TAG)"
 
 flash: $(WIC_IMAGE)
 	@if [ ! -b "$(SDCARD_DEV)" ]; then \
