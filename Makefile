@@ -87,10 +87,11 @@ endif
 # the same `make setup` invocation that installed it.
 UV               := $(shell command -v uv 2>/dev/null || echo $(HOME)/.local/bin/uv)
 
-# Find the wic image + its block map produced by the build. The deploy
-# dir is tmp-glibc (glibc distro) and the image carries a .rootfs infix;
-# use the stable symlinks Yocto maintains to the latest build.
-DEPLOY_DIR       = $(BUILD_DIR)/tmp-glibc/deploy/images/$(MACHINE)
+# Find the wic image + its block map produced by the build. TMPDIR is
+# ${BUILD_DIR}/tmp (wrynose default; the old tmp-glibc is a pre-wrynose
+# leftover) and the image carries a .rootfs infix; use the stable symlinks
+# Yocto maintains to the latest build. Keep in sync with `clean`.
+DEPLOY_DIR       = $(BUILD_DIR)/tmp/deploy/images/$(MACHINE)
 WIC_IMAGE        = $(DEPLOY_DIR)/$(IMAGE)-$(MACHINE).rootfs.wic.bz2
 WIC_BMAP         = $(DEPLOY_DIR)/$(IMAGE)-$(MACHINE).rootfs.wic.bmap
 
