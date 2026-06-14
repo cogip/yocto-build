@@ -38,6 +38,12 @@ APP_IMAGE_BASE_TAG ?= cogip/cogip-tools:console-base
 APP_WHEEL        ?= cogip_tools-1.0.0-cp313-abi3-linux_aarch64.whl
 APP_IMAGE_TAR    := $(DL_DIR)/cogip-app.image.tar.zst
 
+# Per-role environment sources, staged from cogip-tools/raspios into
+# DL_DIR for the cogip-environment recipe (single source of truth, DRY:
+# the role specs live in cogip-tools, not duplicated in the layer).
+APP_CONFIG_ENV   := $(COGIP_TOOLS_PATH)/raspios/config-common.env
+APP_ENV_TEMPLATE := $(COGIP_TOOLS_PATH)/raspios/overlay-rootfs/etc/environment
+
 # Include the Docker / cogip-tools app stack (1) or build a bare kiosk
 # (0: Cog + networking only, no Docker, no app tarball needed -- handy
 # for isolating Wi-Fi / display issues). Plumbed to bitbake via a
@@ -169,6 +175,14 @@ build: $(KAS) $(APP_OVERLAY)
 	  echo "ERROR: $(APP_IMAGE_TAR) is missing (DL_DIR has no container image)." >&2; \
 	  echo "Build it first:  make app-image   (or build a bare kiosk: make build COGIP_APP=0)" >&2; \
 	  exit 1; \
+	fi
+	@if [ "$(COGIP_APP)" = "1" ]; then \
+	  test -f "$(APP_CONFIG_ENV)" && test -f "$(APP_ENV_TEMPLATE)" || { \
+	    echo "ERROR: cogip-tools role env sources missing under $(COGIP_TOOLS_PATH)/raspios." >&2; \
+	    echo "Point COGIP_TOOLS_PATH at your cogip-tools checkout." >&2; exit 1; }; \
+	  mkdir -p $(DL_DIR); \
+	  cp -f "$(APP_CONFIG_ENV)"   "$(DL_DIR)/cogip-config-common.env"; \
+	  cp -f "$(APP_ENV_TEMPLATE)" "$(DL_DIR)/cogip-environment.template"; \
 	fi
 	@mkdir -p $(CCACHE_HOST)
 	$(KAS_CMD) $(KAS_RUNTIME_FLAG) build $(KAS_CONFIG)
