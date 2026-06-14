@@ -33,11 +33,15 @@ fi
 
 WORK="$(mktemp -d)"
 DOCKER_HOST_SOCK="unix://$WORK/docker.sock"
-cleanup() {
-    [ -n "${DOCKERD_PID:-}" ] && kill "$DOCKERD_PID" 2>/dev/null || true
-    [ -n "${DOCKERD_PID:-}" ] && wait "$DOCKERD_PID" 2>/dev/null || true
-    rm -rf "$WORK"
+# Stop the transient dockerd via its OWN pid (from --pidfile), so SIGTERM
+# reaches dockerd directly (graceful: flushes the graph) even though it
+# runs under `unshare`. $NS_PID is the unshare wrapper we wait on.
+stop_dockerd() {
+    [ -f "$WORK/dockerd.pid" ] && kill "$(cat "$WORK/dockerd.pid")" 2>/dev/null || true
+    [ -n "${NS_PID:-}" ] && wait "$NS_PID" 2>/dev/null || true
+    NS_PID=""
 }
+cleanup() { stop_dockerd; rm -rf "$WORK"; }
 trap cleanup EXIT
 
 # fs root = $WORK/rootfs, which will contain a single "docker/" dir = the
@@ -46,16 +50,27 @@ ROOTFS="$WORK/rootfs"
 DATAROOT="$ROOTFS/docker"
 mkdir -p "$DATAROOT"
 
-echo "build-data-ext4: starting transient dockerd (overlay2) ..."
-dockerd \
-    --data-root="$DATAROOT" \
-    --exec-root="$WORK/exec" \
-    --host="$DOCKER_HOST_SOCK" \
-    --pidfile="$WORK/dockerd.pid" \
-    --storage-driver=overlay2 \
-    --bridge=none --iptables=false \
-    >"$WORK/dockerd.log" 2>&1 &
-DOCKERD_PID=$!
+# Run the transient dockerd in its OWN network namespace (unshare --net).
+# Even with --bridge=none, dockerd cleans up the default bridge at init,
+# which would delete the HOST's docker0 and break the main daemon (and
+# kas-container). A private netns makes that physically impossible; the
+# docker client still reaches it over the unix socket (filesystem, not
+# network). docker load needs no networking. lo is brought up for dockerd.
+echo "build-data-ext4: starting transient dockerd (overlay2, isolated netns) ..."
+cat > "$WORK/launch-dockerd.sh" <<EOF
+#!/bin/bash
+ip link set lo up 2>/dev/null || true
+exec dockerd \\
+    --data-root="$DATAROOT" \\
+    --exec-root="$WORK/exec" \\
+    --host="$DOCKER_HOST_SOCK" \\
+    --pidfile="$WORK/dockerd.pid" \\
+    --storage-driver=overlay2 \\
+    --bridge=none --iptables=false
+EOF
+chmod +x "$WORK/launch-dockerd.sh"
+unshare --net -- "$WORK/launch-dockerd.sh" >"$WORK/dockerd.log" 2>&1 &
+NS_PID=$!
 
 # Wait for the daemon to accept connections.
 for _ in $(seq 1 60); do
@@ -75,8 +90,7 @@ docker -H "$DOCKER_HOST_SOCK" image inspect "$TAG" >/dev/null \
 
 # Stop the daemon cleanly so the graph + repositories.json are flushed.
 echo "build-data-ext4: stopping transient dockerd to flush the graph ..."
-kill "$DOCKERD_PID"; wait "$DOCKERD_PID" 2>/dev/null || true
-DOCKERD_PID=""
+stop_dockerd
 
 # Size the ext4: graph size + 30% slack + 64 MiB headroom. The /data
 # partition is larger; data.mount grows the fs to fill it at first boot.
