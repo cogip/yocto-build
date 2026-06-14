@@ -37,6 +37,9 @@ APP_IMAGE_BASE_TAG ?= cogip/cogip-tools:console-base
 # Cross-compiled arm64 wheel produced by cogip-tools' build_wheel target.
 APP_WHEEL        ?= cogip_tools-1.0.0-cp313-abi3-linux_aarch64.whl
 APP_IMAGE_TAR    := $(DL_DIR)/cogip-app.image.tar.zst
+# Editable venv exported from the image, pre-shipped on the rootfs by the
+# cogip-app-venv recipe (no first-boot 'docker cp' seed).
+APP_VENV_TAR     := $(DL_DIR)/cogip-venv.tar.zst
 
 # Per-role environment sources, staged from cogip-tools/raspios into
 # DL_DIR for the cogip-environment recipe (single source of truth, DRY:
@@ -161,7 +164,12 @@ app-image:
 	    .
 	rm -f ./$(APP_WHEEL)
 	docker save $(APP_IMAGE_TAG) | zstd -f -T0 -19 -o $(APP_IMAGE_TAR)
-	@echo "Saved $(APP_IMAGE_TAR) ($$(du -h $(APP_IMAGE_TAR) | cut -f1)). cogip-app-image picks it up from DL_DIR (local file://, no checksum to pin)."
+	# Export the editable venv so cogip-app-venv ships it on the rootfs
+	# (no first-boot docker cp). docker cp streams a tar rooted at ".venv/".
+	cid=$$(docker create $(APP_IMAGE_TAG)); \
+	  docker cp "$$cid:/opt/.venv" - | zstd -f -T0 -19 -o $(APP_VENV_TAR); \
+	  docker rm "$$cid" >/dev/null
+	@echo "Saved $(APP_IMAGE_TAR) ($$(du -h $(APP_IMAGE_TAR) | cut -f1)) + $(APP_VENV_TAR) ($$(du -h $(APP_VENV_TAR) | cut -f1)). Picked up from DL_DIR (local file://)."
 
 # Regenerate the COGIP_APP overlay every invocation so the value tracks
 # the make variable (kas reads env blocks from config files, not the
