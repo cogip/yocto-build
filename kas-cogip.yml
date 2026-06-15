@@ -1,0 +1,153 @@
+header:
+  version: 14
+
+distro: cogip
+machine: raspberrypi4-64
+target: cogip-kiosk-image
+
+# Build-time variables passed through to bitbake. Values here are
+# DEFAULTS; the calling environment (Makefile / shell) overrides them,
+# so secrets never need to live in this committed file. kas adds these
+# to BB_ENV_PASSTHROUGH_ADDITIONS automatically.
+env:
+  KIOSK_URL: "http://localhost:8080"
+  # Wi-Fi credentials. Leave SSID empty to ship an Ethernet-only image.
+  # WLAN_PSK is the hashed PSK from `wpa_passphrase SSID passphrase`
+  # (the 64-hex value), NOT the plaintext passphrase.
+  WLAN_SSID: ""
+  WLAN_PSK: ""
+  # Cogip role: 0 = beacon (server-beacon + dashboard + beaconcam),
+  # 1-5 = robot (server + planner + copilot + detector + ...). Selects
+  # which cogip@ tool services are enabled. Default beacon (simplest).
+  ROBOT_ID: "0"
+  # 1 = include the Docker / cogip-tools application stack; 0 = bare
+  # kiosk (Cog + networking only, no Docker, no app tarball needed).
+  COGIP_APP: "1"
+
+repos:
+  # Cogip layers: each is its own git repo, checked out under layers/
+  # (gitignored here) so it sits inside the kas work dir and is visible
+  # to kas-container. Referenced by local PATH so kas uses the checkout
+  # as-is -- you edit + commit in layers/meta-cogip-* and build without
+  # pushing. (kas does not manage their git: no fetch/reset, no
+  # branch-contains check that would reject unpushed local commits.)
+  #
+  # For a standalone / CI-reproducible build, pin each to the remote
+  # instead and regenerate the lock once the layers are pushed:
+  #   meta-cogip-app:
+  #     url: https://github.com/cogip/meta-cogip-app.git
+  #     branch: feat/yocto-cogip
+  #     path: layers/meta-cogip-app
+  meta-cogip-bsp:
+    path: layers/meta-cogip-bsp
+  meta-cogip-distro:
+    path: layers/meta-cogip-distro
+  meta-cogip-app:
+    path: layers/meta-cogip-app
+
+  # Base layers. poky no longer ships as the umbrella repo on wrynose, so
+  # clone its constituents independently: openembedded-core (the `meta`
+  # layer), bitbake (its own repo), and meta-yocto (meta-poky +
+  # meta-yocto-bsp).
+  # VERIFY ON FIRST BUILD: (1) the bitbake branch matching wrynose -- it
+  # is version-numbered, not codenamed; 2.18 is the newest. (2) that kas
+  # locates bitbake from this standalone repo (no `layers:` -> not a
+  # layer, just the bitbake tool).
+  bitbake:
+    url: https://git.openembedded.org/bitbake
+    branch: "2.18"
+    # bitbake is the build tool, not a layer: kas still clones it (and
+    # finds bitbake/bin/bitbake), but must NOT add its root to bblayers.
+    layers:
+      .: disabled
+
+  openembedded-core:
+    url: https://git.openembedded.org/openembedded-core
+    branch: wrynose
+    layers:
+      meta:
+
+  meta-yocto:
+    url: https://git.yoctoproject.org/meta-yocto
+    branch: wrynose
+    layers:
+      meta-poky:
+      meta-yocto-bsp:
+
+  meta-openembedded:
+    url: https://git.openembedded.org/meta-openembedded
+    branch: wrynose
+    layers:
+      meta-oe:
+      meta-python:
+      meta-networking:
+      meta-multimedia:
+      # Required by meta-virtualization's LAYERDEPENDS (docker stack).
+      meta-filesystems:
+
+  # No wrynose branch yet; master tracks the upcoming release.
+  meta-raspberrypi:
+    url: https://git.yoctoproject.org/meta-raspberrypi
+    branch: master
+    layers:
+      .:
+
+  # Igalia's wrynose-in-progress branch (no stable wrynose yet).
+  meta-webkit:
+    url: https://github.com/Igalia/meta-webkit
+    branch: next-wrynose
+    layers:
+      .:
+
+  meta-virtualization:
+    url: https://git.yoctoproject.org/meta-virtualization
+    branch: wrynose
+    layers:
+      .:
+
+local_conf_header:
+  cogip: |
+    INHERIT += "rm_work"
+    # Compiler cache: hashes preprocessed sources and reuses object files
+    # across rebuilds. Stored in the shared, persistent /ccache mount
+    # (host ~/.yocto/ccache, bind-mounted by the Makefile via
+    # --runtime-args), so it survives distclean and is reused across
+    # projects -- alongside DL_DIR (/downloads) and SSTATE_DIR (/sstate),
+    # which kas-container mounts natively.
+    INHERIT += "ccache"
+    CCACHE_TOP_DIR = "/ccache"
+    CCACHE_MAXSIZE = "20G"
+    # Keep the hash-equivalence DB with the shared sstate (default on
+    # wrynose is the per-build dir, which defeats SSTATE_DIR reuse).
+    BB_HASHSERVE_DB_DIR = "${SSTATE_DIR}"
+    # Use 3/4 of the available cores (min 1). An unbounded
+    # BB_NUMBER_THREADS x PARALLEL_MAKE saturates RAM on the heavy
+    # WebKit C++ links and reboots the machine; 3/4 leaves headroom.
+    BB_NUMBER_THREADS = "${@max(1, oe.utils.cpu_count() * 1 // 2)}"
+    PARALLEL_MAKE = "-j ${@max(1, oe.utils.cpu_count() * 1 // 2)}"
+    # WebKit links are the memory killers (each peaks at several GB).
+    # WebKit ignores CMake job pools, so the only effective lever is its
+    # ninja -j. Override PARALLEL_MAKE for this recipe only, to the more
+    # conservative of a core-based (cores/4 + 1) and a memory-based
+    # ((MemTotal_MB - 4096) / 2560, ~2.5 GB/job + 4 GB OS headroom) limit.
+    # 20-core/27 GB host -> min(6, 9) = 6.
+    PARALLEL_MAKE:pn-wpewebkit = "-j ${@max(1, min(oe.utils.cpu_count() // 4 + 1, (int(open('/proc/meminfo').readline().split()[1]) // 1024 - 4096) // 2560))}"
+    # Memory-pressure safety net (Linux PSI): bitbake stops launching
+    # new tasks while memory stall pressure exceeds this threshold
+    # (microseconds stalled per polling window). Lower = more cautious.
+    BB_PRESSURE_MAX_MEMORY = "16000"
+    # Note: WebKit *feature* policy (dropping the GStreamer media stack,
+    # disabling WebCodecs) is application policy and lives in
+    # meta-cogip-app's wpewebkit bbappend, not here. This block keeps
+    # only host-build tuning.
+    CONF_VERSION = "2"
+    # Accept the Raspberry Pi GPU EULA (closed-source firmware).
+    LICENSE_FLAGS_ACCEPTED += "synaptics-killswitch"
+    # Lift the kas-provided environment variables into bitbake vars so
+    # recipes (cog-service, cogip-net) can read them. The env block
+    # above supplies the defaults / overrides.
+    KIOSK_URL := "${@os.getenv('KIOSK_URL', 'http://localhost:8080')}"
+    WLAN_SSID := "${@os.getenv('WLAN_SSID', '')}"
+    WLAN_PSK := "${@os.getenv('WLAN_PSK', '')}"
+    ROBOT_ID := "${@os.getenv('ROBOT_ID', '0')}"
+    COGIP_APP := "${@os.getenv('COGIP_APP', '1')}"
