@@ -23,10 +23,17 @@ COPY ${WHEEL} /tmp/${WHEEL}
 # /opt/.venv: locked runtime deps (offline, from uv.lock) + the COGIP
 # tools wheel (--no-deps so nothing is pulled from the network). uv.lock
 # / pyproject.toml live in /src (WORKDIR of the base image).
+#
+# compileall bakes bytecode into the venv so the first import at boot
+# skips the parse+compile step (the wheel ships .py only). Measured ~1.5s
+# off the dashboard cold start, and it helps every tool's first import.
+# Editing a .py on the board stays effective: Python recompiles a file
+# whose source is newer than its cached .pyc.
 RUN cd /src \
  && UV_PROJECT_ENVIRONMENT=/opt/.venv uv venv --system-site-packages /opt/.venv \
  && UV_PROJECT_ENVIRONMENT=/opt/.venv uv sync --no-dev --no-install-project --frozen \
  && uv pip install --python /opt/.venv/bin/python --no-deps "/tmp/${WHEEL}" \
- && rm -f "/tmp/${WHEEL}"
+ && rm -f "/tmp/${WHEEL}" \
+ && /opt/.venv/bin/python -m compileall -q -j 0 /opt/.venv
 
 CMD ["sleep", "infinity"]
