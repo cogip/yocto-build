@@ -36,6 +36,9 @@ APP_IMAGE_TAG    ?= cogip/cogip-tools:console
 APP_IMAGE_BASE_TAG ?= cogip/cogip-tools:console-base
 # Cross-compiled arm64 wheel produced by cogip-tools' build_wheel target.
 APP_WHEEL        ?= cogip_tools-1.0.0-cp313-abi3-linux_aarch64.whl
+# Same wheel staged into DL_DIR, where the native cogip-tools recipe picks
+# it up (file://). The native image needs only this from cogip-tools.
+APP_WHEEL_DL     := $(DL_DIR)/$(APP_WHEEL)
 APP_IMAGE_TAR    := $(DL_DIR)/cogip-app.image.tar.zst
 # Editable venv exported from the image, pre-shipped on the rootfs by the
 # cogip-app-venv recipe (no first-boot 'docker cp' seed).
@@ -58,6 +61,12 @@ APP_ENV_TEMPLATE := $(COGIP_TOOLS_PATH)/raspios/overlay-rootfs/etc/environment
 # kas-container; only kas config env blocks do).
 COGIP_APP        ?= 1
 APP_OVERLAY      := .kas-cogip-app.yml
+
+# Native (default) vs Docker deployment, inferred from the image name:
+# cogip-kiosk-image = native (tools on the system python, no Docker);
+# cogip-kiosk-docker-image = the containerized fallback. Native needs only
+# the wheel staged in DL_DIR; Docker needs the pre-loaded image tar + /data.
+NATIVE           := $(if $(findstring docker,$(IMAGE)),0,1)
 
 # kas merges colon-separated configs, later ones overriding earlier.
 # Order: base, then the generated COGIP_APP overlay, then the local
@@ -95,13 +104,14 @@ DEPLOY_DIR       = $(BUILD_DIR)/tmp/deploy/images/$(MACHINE)
 WIC_IMAGE        = $(DEPLOY_DIR)/$(IMAGE)-$(MACHINE).rootfs.wic.bz2
 WIC_BMAP         = $(DEPLOY_DIR)/$(IMAGE)-$(MACHINE).rootfs.wic.bmap
 
-.PHONY: help setup build shell flash clean distclean app-image
+.PHONY: help setup build shell flash clean distclean app-image app-wheel
 
 help:
 	@echo "Targets:"
 	@echo "  setup     bootstrap uv + .venv with kas (idempotent)"
-	@echo "  app-image build the arm64 cogip container + save it for embedding"
-	@echo "  build     build the kiosk image (default target)"
+	@echo "  app-wheel build the arm64 cogip wheel + stage it in DL_DIR (native)"
+	@echo "  app-image build the arm64 cogip container + save it for embedding (docker)"
+	@echo "  build     build the kiosk image (default target; native unless IMAGE=...-docker-image)"
 	@echo "  shell     enter a kas/bitbake shell"
 	@echo "  flash     bmaptool the built image to SDCARD_DEV ($(SDCARD_DEV))"
 	@echo "  clean     remove build/tmp"
@@ -142,6 +152,22 @@ $(KAS): $(UV) pyproject.toml
 #   2. Build the cogip-console base (arm64) from the cogip-tools Dockerfile.
 #   3. Build the deploy image (Dockerfile.deploy): base + a /opt/.venv
 #      with the wheel installed, tagged as the shipped image.
+# Native deployment needs only the arm64 wheel: cross-compile it with
+# cogip-tools' own build_wheel service (debian + aarch64 cross-gcc, no QEMU
+# C++ build) and stage it into DL_DIR, where the cogip-tools recipe picks it
+# up (file://). No container image, no /data store.
+app-wheel:
+	@test -f "$(COGIP_TOOLS_PATH)/Dockerfile" || { \
+	  echo "ERROR: no Dockerfile at COGIP_TOOLS_PATH=$(COGIP_TOOLS_PATH)" >&2; \
+	  echo "Point COGIP_TOOLS_PATH at your cogip-tools checkout." >&2; exit 1; }
+	@mkdir -p $(DL_DIR)
+	cd $(COGIP_TOOLS_PATH) && UID=$$(id -u) GID=$$(id -g) \
+	    docker compose run --rm --build build_wheel
+	@test -f "$(COGIP_TOOLS_PATH)/dist/$(APP_WHEEL)" || { \
+	  echo "ERROR: wheel not produced: $(COGIP_TOOLS_PATH)/dist/$(APP_WHEEL)" >&2; exit 1; }
+	cp -f "$(COGIP_TOOLS_PATH)/dist/$(APP_WHEEL)" "$(APP_WHEEL_DL)"
+	@echo "Staged $(APP_WHEEL) into DL_DIR ($$(du -h $(APP_WHEEL_DL) | cut -f1))."
+
 app-image:
 	@test -f "$(COGIP_TOOLS_PATH)/Dockerfile" || { \
 	  echo "ERROR: no Dockerfile at COGIP_TOOLS_PATH=$(COGIP_TOOLS_PATH)" >&2; \
@@ -184,12 +210,17 @@ $(APP_OVERLAY):
 	@printf 'header:\n  version: 14\nenv:\n  COGIP_APP: "%s"\n' "$(COGIP_APP)" > $@
 
 build: $(KAS) $(APP_OVERLAY)
-	@if [ "$(COGIP_APP)" = "1" ] && [ ! -f "$(APP_IMAGE_TAR)" ]; then \
+	@if [ "$(COGIP_APP)" = "1" ] && [ "$(NATIVE)" = "1" ] && [ ! -f "$(APP_WHEEL_DL)" ]; then \
+	  echo "ERROR: $(APP_WHEEL_DL) is missing (cogip-tools wheel)." >&2; \
+	  echo "Build it first:  make app-wheel   (or build a bare kiosk: make build COGIP_APP=0)" >&2; \
+	  exit 1; \
+	fi
+	@if [ "$(COGIP_APP)" = "1" ] && [ "$(NATIVE)" = "0" ] && [ ! -f "$(APP_IMAGE_TAR)" ]; then \
 	  echo "ERROR: $(APP_IMAGE_TAR) is missing (DL_DIR has no container image)." >&2; \
 	  echo "Build it first:  make app-image   (or build a bare kiosk: make build COGIP_APP=0)" >&2; \
 	  exit 1; \
 	fi
-	@if [ "$(COGIP_APP)" = "1" ] && [ ! -f "$(APP_DATA_EXT4)" ]; then \
+	@if [ "$(COGIP_APP)" = "1" ] && [ "$(NATIVE)" = "0" ] && [ ! -f "$(APP_DATA_EXT4)" ]; then \
 	  echo "ERROR: $(APP_DATA_EXT4) is missing (pre-loaded /data image)." >&2; \
 	  echo "Build it first:  make app-data   (needs 'make app-image' first)" >&2; \
 	  exit 1; \
